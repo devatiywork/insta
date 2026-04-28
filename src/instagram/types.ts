@@ -43,3 +43,12 @@ export class PrivateContentError extends InstagramError {
     this.name = "PrivateContentError";
   }
 }
+
+export class AuthRequiredError extends InstagramError {
+  constructor() {
+    super(
+      "Instagram blocks anonymous access. Set IG_COOKIES in .env (see README).",
+    );
+    this.name = "AuthRequiredError";
+  }
+}

@@ -5,3 +5,5 @@ services:
     environment:
       BOT_TOKEN: ${BOT_TOKEN}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      IG_COOKIES: ${IG_COOKIES:-}
+      ALLOWED_USER_IDS: ${ALLOWED_USER_IDS:-}

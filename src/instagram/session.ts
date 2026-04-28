@@ -1,9 +1,11 @@
+import { config } from "../config.js";
 import { logger } from "../logger.js";
 
 interface SessionCache {
   cookies: string;
   csrfToken?: string;
   expiresAt: number;
+  authenticated: boolean;
 }
 
 let cache: SessionCache | null = null;
@@ -12,10 +14,39 @@ const TTL_MS = 30 * 60 * 1000;
 const HOME_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36";
 
+function extractCookieValue(cookies: string, name: string): string | undefined {
+  const re = new RegExp(`(?:^|;\\s*)${name}=([^;]+)`);
+  const match = cookies.match(re);
+  return match ? match[1] : undefined;
+}
+
 export async function getSession(force = false): Promise<SessionCache> {
   if (!force && cache && Date.now() < cache.expiresAt) return cache;
 
-  logger.debug("bootstrapping instagram session");
+  if (config.igCookies) {
+    const csrfToken = extractCookieValue(config.igCookies, "csrftoken");
+    const sessionId = extractCookieValue(config.igCookies, "sessionid");
+    cache = {
+      cookies: config.igCookies,
+      csrfToken,
+      expiresAt: Number.MAX_SAFE_INTEGER,
+      authenticated: !!sessionId,
+    };
+    logger.debug(
+      {
+        hasCsrf: !!csrfToken,
+        hasSessionId: !!sessionId,
+        cookieKeys: config.igCookies
+          .split(";")
+          .map((s) => s.trim().split("=")[0])
+          .filter(Boolean),
+      },
+      "using IG_COOKIES from env",
+    );
+    return cache;
+  }
+
+  logger.debug("bootstrapping anonymous instagram session");
   const startedAt = Date.now();
   const res = await fetch("https://www.instagram.com/", {
     headers: {
@@ -42,7 +73,12 @@ export async function getSession(force = false): Promise<SessionCache> {
     .join("; ");
   const csrfToken = cookieMap.get("csrftoken");
 
-  cache = { cookies, csrfToken, expiresAt: Date.now() + TTL_MS };
+  cache = {
+    cookies,
+    csrfToken,
+    expiresAt: Date.now() + TTL_MS,
+    authenticated: false,
+  };
   logger.debug(
     {
       status: res.status,
@@ -50,7 +86,7 @@ export async function getSession(force = false): Promise<SessionCache> {
       cookieKeys: Array.from(cookieMap.keys()),
       elapsedMs: Date.now() - startedAt,
     },
-    "instagram session ready",
+    "anonymous session ready",
   );
   return cache;
 }

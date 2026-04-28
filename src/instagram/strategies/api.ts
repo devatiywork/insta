@@ -5,6 +5,7 @@ import { shortcodeToMediaId } from "../shortcode.js";
 import {
   type MediaItem,
   type ScrapeResult,
+  AuthRequiredError,
   NotFoundError,
   PrivateContentError,
   InstagramError,
@@ -104,17 +105,22 @@ export async function apiStrategy(shortcode: string): Promise<ScrapeResult> {
 
   const trimmed = body.trimStart();
   if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+    const looksLikeLogin = /login|loginandsignuppage|polariserrorroot/i.test(
+      body.slice(0, 5000),
+    );
     logger.warn(
       {
         shortcode,
         bodyLength: body.length,
         bodySnippet: body.slice(0, 500),
-        looksLikeLogin: /login|csrf_token|loginandsignuppage/i.test(
-          body.slice(0, 5000),
-        ),
+        looksLikeLogin,
+        authenticated: session.authenticated,
       },
       "api strategy: got HTML instead of JSON (likely login wall)",
     );
+    if (looksLikeLogin && !session.authenticated) {
+      throw new AuthRequiredError();
+    }
     throw new InstagramError("API returned HTML (login wall)");
   }
 

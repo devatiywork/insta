@@ -4,6 +4,7 @@ import { getSession } from "../session.js";
 import {
   type MediaItem,
   type ScrapeResult,
+  AuthRequiredError,
   NotFoundError,
   InstagramError,
 } from "../types.js";
@@ -122,26 +123,31 @@ export async function embedStrategy(shortcode: string): Promise<ScrapeResult> {
       "og:image",
       "LoginAndSignupPage",
       "loginPage",
+      "PolarisErrorRoot",
       "csrf_token",
       "shortcode_media",
       "xdt_api__v1__media",
     ];
     const found = anchors.filter((a) => body.includes(a));
     const titleMatch = body.match(/<title>([^<]*)<\/title>/);
+    const looksLikeLogin =
+      found.includes("loginPage") ||
+      found.includes("LoginAndSignupPage") ||
+      found.includes("PolarisErrorRoot");
     logger.warn(
       {
         shortcode,
         title: titleMatch?.[1],
         foundAnchors: found,
+        looksLikeLogin,
+        authenticated: session.authenticated,
         bodyLength: body.length,
-        bodyHead: body.slice(0, 1500),
-        bodyMiddle: body.slice(
-          Math.max(0, Math.floor(body.length / 2) - 750),
-          Math.floor(body.length / 2) + 750,
-        ),
       },
       "embed strategy: no media matched",
     );
+    if (looksLikeLogin && !session.authenticated) {
+      throw new AuthRequiredError();
+    }
     throw new InstagramError("No media found in embed page");
   }
   logger.debug(

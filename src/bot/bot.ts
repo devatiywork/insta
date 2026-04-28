@@ -2,6 +2,7 @@ import { Bot, GrammyError, HttpError } from "grammy";
 import { autoRetry } from "@grammyjs/auto-retry";
 import { config } from "../config.js";
 import { logger } from "../logger.js";
+import { createAllowlist } from "./allowlist.js";
 import { registerStart } from "./handlers/start.js";
 import { registerMessage } from "./handlers/message.js";
 
@@ -11,6 +12,8 @@ export function createBot(): Bot {
   });
 
   bot.api.config.use(autoRetry({ maxRetryAttempts: 3, maxDelaySeconds: 30 }));
+
+  bot.use(createAllowlist());
 
   registerStart(bot);
   registerMessage(bot);

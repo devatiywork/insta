@@ -2,6 +2,7 @@ import type { Bot } from 'grammy'
 import { scrape } from '../../instagram/scraper.js'
 import { sendMedia } from '../../instagram/send-media.js'
 import {
+	AuthRequiredError,
 	InstagramError,
 	InvalidUrlError,
 	NotFoundError,
@@ -16,6 +17,8 @@ function userMessageForError(err: unknown): string {
 	if (err instanceof NotFoundError) return '❌ Пост не найден или удалён.'
 	if (err instanceof PrivateContentError)
 		return '🔒 Пост приватный — я работаю только с публичными.'
+	if (err instanceof AuthRequiredError)
+		return '🔐 Instagram требует авторизованную сессию. Админу: пропиши IG_COOKIES в .env (см. README).'
 	if (err instanceof InstagramError)
 		return '⚠️ Не удалось получить медиа. Попробуй ещё раз позже.'
 	return '⚠️ Что-то пошло не так. Попробуй ещё раз.'
