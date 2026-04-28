@@ -5,10 +5,10 @@ const WELCOME = `👋 Привет! Я скачиваю контент из Inst
 Просто отправь мне ссылку на пост или Reels, и я пришлю фото/видео обратно.
 
 Поддерживаемые ссылки:
-• https://instagram.com/p/<id>/
-• https://instagram.com/reel/<id>/
-• https://instagram.com/reels/<id>/
-• https://instagram.com/share/<id>/
+• <code>instagram.com/p/{shortcode}</code>
+• <code>instagram.com/reel/{shortcode}</code>
+• <code>instagram.com/reels/{shortcode}</code>
+• <code>instagram.com/share/{shortcode}</code>
 
 ⚠️ Бот работает только с публичными постами.`;
 
@@ -18,7 +18,12 @@ const HELP = `Отправь ссылку на публичный пост Insta
 /start — приветствие
 /help — эта справка`;
 
+const REPLY_OPTS = {
+  parse_mode: "HTML" as const,
+  link_preview_options: { is_disabled: true },
+};
+
 export function registerStart(bot: Bot): void {
-  bot.command("start", (ctx) => ctx.reply(WELCOME));
-  bot.command("help", (ctx) => ctx.reply(HELP));
+  bot.command("start", (ctx) => ctx.reply(WELCOME, REPLY_OPTS));
+  bot.command("help", (ctx) => ctx.reply(HELP, REPLY_OPTS));
 }

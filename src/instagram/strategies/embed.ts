@@ -1,4 +1,6 @@
+import { logger } from "../../logger.js";
 import { fetchText } from "../http.js";
+import { getSession } from "../session.js";
 import {
   type MediaItem,
   type ScrapeResult,
@@ -28,10 +30,21 @@ function decodeJsonString(s: string): string {
 
 export async function embedStrategy(shortcode: string): Promise<ScrapeResult> {
   const url = `https://www.instagram.com/p/${shortcode}/embed/captioned/`;
+  const session = await getSession();
+  logger.debug({ shortcode, url }, "embed strategy: request");
   const { status, body } = await fetchText(url, {
-    headers: { Referer: "https://www.instagram.com/" },
+    headers: {
+      Referer: "https://www.instagram.com/",
+      Cookie: session.cookies,
+    },
   });
 
+  if (status !== 200) {
+    logger.warn(
+      { shortcode, status, bodySnippet: body.slice(0, 500) },
+      "embed strategy: non-200 response",
+    );
+  }
   if (status === 404) throw new NotFoundError(shortcode);
   if (status !== 200) {
     throw new InstagramError(`Embed responded with ${status}`);
@@ -68,8 +81,73 @@ export async function embedStrategy(shortcode: string): Promise<ScrapeResult> {
   }
 
   if (items.length === 0) {
+    const ogVideo =
+      body.match(
+        /<meta\s+property="og:video:secure_url"\s+content="([^"]+)"/,
+      )?.[1] ??
+      body.match(/<meta\s+property="og:video"\s+content="([^"]+)"/)?.[1];
+    if (ogVideo) {
+      items.push({ kind: "video", url: unescapeHtmlEntities(ogVideo) });
+    }
+  }
+
+  if (items.length === 0) {
+    const ogImage = body.match(
+      /<meta\s+property="og:image"\s+content="([^"]+)"/,
+    )?.[1];
+    if (ogImage) {
+      items.push({ kind: "photo", url: unescapeHtmlEntities(ogImage) });
+    }
+  }
+
+  if (items.length === 0) {
+    const videoVersionsMatch = body.match(
+      /"video_versions":\s*\[\s*\{[^}]*?"url":\s*"([^"]+)"/,
+    );
+    if (videoVersionsMatch && videoVersionsMatch[1]) {
+      items.push({
+        kind: "video",
+        url: decodeJsonString(videoVersionsMatch[1]),
+      });
+    }
+  }
+
+  if (items.length === 0) {
+    const anchors = [
+      "video_url",
+      "display_url",
+      "video_versions",
+      "image_versions2",
+      "og:video",
+      "og:image",
+      "LoginAndSignupPage",
+      "loginPage",
+      "csrf_token",
+      "shortcode_media",
+      "xdt_api__v1__media",
+    ];
+    const found = anchors.filter((a) => body.includes(a));
+    const titleMatch = body.match(/<title>([^<]*)<\/title>/);
+    logger.warn(
+      {
+        shortcode,
+        title: titleMatch?.[1],
+        foundAnchors: found,
+        bodyLength: body.length,
+        bodyHead: body.slice(0, 1500),
+        bodyMiddle: body.slice(
+          Math.max(0, Math.floor(body.length / 2) - 750),
+          Math.floor(body.length / 2) + 750,
+        ),
+      },
+      "embed strategy: no media matched",
+    );
     throw new InstagramError("No media found in embed page");
   }
+  logger.debug(
+    { shortcode, items: items.length, kinds: items.map((i) => i.kind) },
+    "embed strategy: parsed",
+  );
 
   let caption: string | undefined;
   const captionMatch = body.match(/"caption_text":"((?:[^"\\]|\\.)*)"/);

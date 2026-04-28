@@ -5,4 +5,5 @@ export const logger = pino({
   level: config.logLevel,
   base: undefined,
   timestamp: pino.stdTimeFunctions.isoTime,
+  serializers: { err: pino.stdSerializers.err },
 });

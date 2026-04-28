@@ -1,4 +1,6 @@
+import { logger } from "../../logger.js";
 import { fetchText } from "../http.js";
+import { getSession } from "../session.js";
 import { shortcodeToMediaId } from "../shortcode.js";
 import {
   type MediaItem,
@@ -67,32 +69,78 @@ function toItem(node: ApiMediaItem): MediaItem | null {
 export async function apiStrategy(shortcode: string): Promise<ScrapeResult> {
   const mediaId = shortcodeToMediaId(shortcode);
   const url = `https://www.instagram.com/api/v1/media/${mediaId}/info/`;
+  const session = await getSession();
+  logger.debug(
+    { shortcode, mediaId, url, hasCsrf: !!session.csrfToken },
+    "api strategy: request",
+  );
 
   const { status, body } = await fetchText(url, {
     headers: {
       "x-ig-app-id": APP_ID,
       "x-asbd-id": "129477",
       "x-ig-www-claim": "0",
+      "x-csrftoken": session.csrfToken ?? "",
+      "x-requested-with": "XMLHttpRequest",
       "sec-fetch-site": "same-origin",
+      "sec-fetch-mode": "cors",
+      "sec-fetch-dest": "empty",
+      Cookie: session.cookies,
       Referer: `https://www.instagram.com/p/${shortcode}/`,
     },
   });
 
+  if (status !== 200) {
+    logger.warn(
+      { shortcode, status, bodySnippet: body.slice(0, 500) },
+      "api strategy: non-200 response",
+    );
+  }
   if (status === 404) throw new NotFoundError(shortcode);
   if (status === 401 || status === 403) throw new PrivateContentError(shortcode);
   if (status !== 200) {
     throw new InstagramError(`API responded with ${status}`);
   }
 
+  const trimmed = body.trimStart();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+    logger.warn(
+      {
+        shortcode,
+        bodyLength: body.length,
+        bodySnippet: body.slice(0, 500),
+        looksLikeLogin: /login|csrf_token|loginandsignuppage/i.test(
+          body.slice(0, 5000),
+        ),
+      },
+      "api strategy: got HTML instead of JSON (likely login wall)",
+    );
+    throw new InstagramError("API returned HTML (login wall)");
+  }
+
   let data: ApiResponse;
   try {
     data = JSON.parse(body) as ApiResponse;
   } catch (err) {
+    logger.warn(
+      { shortcode, bodySnippet: body.slice(0, 500) },
+      "api strategy: invalid JSON",
+    );
     throw new InstagramError("Failed to parse API response", err);
   }
 
   const root = data.items?.[0];
-  if (!root) throw new NotFoundError(shortcode);
+  if (!root) {
+    logger.warn(
+      { shortcode, keys: Object.keys(data) },
+      "api strategy: no items in response",
+    );
+    throw new NotFoundError(shortcode);
+  }
+  logger.debug(
+    { shortcode, mediaType: root.media_type, carouselSize: root.carousel_media?.length },
+    "api strategy: parsed root",
+  );
 
   const items: MediaItem[] = [];
   if (root.media_type === 8 && root.carousel_media) {

@@ -16,14 +16,25 @@ export async function scrape(rawUrl: string): Promise<ScrapeResult> {
   const shortcode = extractShortcode(url);
   if (!shortcode) throw new InvalidUrlError(rawUrl);
 
+  logger.debug({ rawUrl, url, shortcode }, "scrape: starting");
   try {
-    return await apiStrategy(shortcode);
+    const result = await apiStrategy(shortcode);
+    logger.debug(
+      { shortcode, items: result.items.length, source: result.source },
+      "scrape: api ok",
+    );
+    return result;
   } catch (err) {
     if (err instanceof PrivateContentError) throw err;
     logger.warn(
-      { shortcode, err: (err as Error).message },
+      { shortcode, err },
       "api strategy failed, falling back to embed",
     );
-    return await embedStrategy(shortcode);
+    const result = await embedStrategy(shortcode);
+    logger.debug(
+      { shortcode, items: result.items.length, source: result.source },
+      "scrape: embed ok",
+    );
+    return result;
   }
 }

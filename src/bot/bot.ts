@@ -23,9 +23,17 @@ export function createBot(): Bot {
       chatId: ctx.chat?.id,
     });
     if (e instanceof GrammyError) {
-      log.error({ description: e.description }, "telegram api error");
+      log.error(
+        {
+          description: e.description,
+          method: e.method,
+          parameters: e.parameters,
+          payload: e.payload,
+        },
+        "telegram api error",
+      );
     } else if (e instanceof HttpError) {
-      log.error({ err: e.message }, "telegram network error");
+      log.error({ err: e }, "telegram network error");
     } else {
       log.error({ err: e }, "unhandled bot error");
     }
