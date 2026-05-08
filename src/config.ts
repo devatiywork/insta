@@ -31,6 +31,7 @@ export const config = {
   apiRoot: optional("API_ROOT", "https://api.telegram.org"),
   logLevel: optional("LOG_LEVEL", "info"),
   igCookies: optional("IG_COOKIES", ""),
+  tiktokCookies: optional("TIKTOK_COOKIES", ""),
   allowedUserIds: parseUserIds("ALLOWED_USER_IDS"),
 } as const;
 

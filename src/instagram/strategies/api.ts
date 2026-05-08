@@ -1,15 +1,15 @@
 import { logger } from "../../logger.js";
-import { fetchText } from "../http.js";
-import { getSession } from "../session.js";
-import { shortcodeToMediaId } from "../shortcode.js";
+import { fetchText } from "../../http.js";
 import {
   type MediaItem,
   type ScrapeResult,
   AuthRequiredError,
   NotFoundError,
   PrivateContentError,
-  InstagramError,
-} from "../types.js";
+  MediaError,
+} from "../../media/types.js";
+import { getSession } from "../session.js";
+import { shortcodeToMediaId } from "../shortcode.js";
 
 const APP_ID = "936619743392459";
 
@@ -100,7 +100,7 @@ export async function apiStrategy(shortcode: string): Promise<ScrapeResult> {
   if (status === 404) throw new NotFoundError(shortcode);
   if (status === 401 || status === 403) throw new PrivateContentError(shortcode);
   if (status !== 200) {
-    throw new InstagramError(`API responded with ${status}`);
+    throw new MediaError(`API responded with ${status}`);
   }
 
   const trimmed = body.trimStart();
@@ -119,9 +119,9 @@ export async function apiStrategy(shortcode: string): Promise<ScrapeResult> {
       "api strategy: got HTML instead of JSON (likely login wall)",
     );
     if (looksLikeLogin && !session.authenticated) {
-      throw new AuthRequiredError();
+      throw new AuthRequiredError("instagram");
     }
-    throw new InstagramError("API returned HTML (login wall)");
+    throw new MediaError("API returned HTML (login wall)");
   }
 
   let data: ApiResponse;
@@ -132,7 +132,7 @@ export async function apiStrategy(shortcode: string): Promise<ScrapeResult> {
       { shortcode, bodySnippet: body.slice(0, 500) },
       "api strategy: invalid JSON",
     );
-    throw new InstagramError("Failed to parse API response", err);
+    throw new MediaError("Failed to parse API response", err);
   }
 
   const root = data.items?.[0];
@@ -144,7 +144,11 @@ export async function apiStrategy(shortcode: string): Promise<ScrapeResult> {
     throw new NotFoundError(shortcode);
   }
   logger.debug(
-    { shortcode, mediaType: root.media_type, carouselSize: root.carousel_media?.length },
+    {
+      shortcode,
+      mediaType: root.media_type,
+      carouselSize: root.carousel_media?.length,
+    },
     "api strategy: parsed root",
   );
 
@@ -160,14 +164,15 @@ export async function apiStrategy(shortcode: string): Promise<ScrapeResult> {
   }
 
   if (items.length === 0) {
-    throw new InstagramError("No media found in API response");
+    throw new MediaError("No media found in API response");
   }
 
   return {
+    platform: "instagram",
     shortcode,
     caption: root.caption?.text,
     author: root.user?.username,
     items,
-    source: "api",
+    source: "ig-api",
   };
 }

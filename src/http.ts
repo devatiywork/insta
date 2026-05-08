@@ -1,4 +1,4 @@
-import { logger } from "../logger.js";
+import { logger } from "./logger.js";
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 
@@ -17,27 +17,33 @@ export interface FetchOptions {
   headers?: Record<string, string>;
   timeoutMs?: number;
   retries?: number;
+  userAgent?: string;
 }
 
 export async function fetchText(
   url: string,
   options: FetchOptions = {},
 ): Promise<{ status: number; body: string }> {
-  const { headers = {}, timeoutMs = DEFAULT_TIMEOUT_MS, retries = 2 } = options;
+  const {
+    headers = {},
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    retries = 2,
+    userAgent,
+  } = options;
 
   let lastErr: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
-    const userAgent = pickUserAgent();
+    const ua = userAgent ?? pickUserAgent();
     const startedAt = Date.now();
-    logger.debug({ url, attempt, userAgent }, "http request");
+    logger.debug({ url, attempt, userAgent: ua }, "http request");
     try {
       const res = await fetch(url, {
         method: "GET",
         signal: controller.signal,
         headers: {
-          "User-Agent": userAgent,
+          "User-Agent": ua,
           Accept: "*/*",
           "Accept-Language": "en-US,en;q=0.9",
           ...headers,

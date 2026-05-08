@@ -1,13 +1,13 @@
 import { logger } from "../../logger.js";
-import { fetchText } from "../http.js";
-import { getSession } from "../session.js";
+import { fetchText } from "../../http.js";
 import {
   type MediaItem,
   type ScrapeResult,
   AuthRequiredError,
   NotFoundError,
-  InstagramError,
-} from "../types.js";
+  MediaError,
+} from "../../media/types.js";
+import { getSession } from "../session.js";
 
 function unescapeUnicode(s: string): string {
   return s.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) =>
@@ -48,7 +48,7 @@ export async function embedStrategy(shortcode: string): Promise<ScrapeResult> {
   }
   if (status === 404) throw new NotFoundError(shortcode);
   if (status !== 200) {
-    throw new InstagramError(`Embed responded with ${status}`);
+    throw new MediaError(`Embed responded with ${status}`);
   }
 
   if (
@@ -146,9 +146,9 @@ export async function embedStrategy(shortcode: string): Promise<ScrapeResult> {
       "embed strategy: no media matched",
     );
     if (looksLikeLogin && !session.authenticated) {
-      throw new AuthRequiredError();
+      throw new AuthRequiredError("instagram");
     }
-    throw new InstagramError("No media found in embed page");
+    throw new MediaError("No media found in embed page");
   }
   logger.debug(
     { shortcode, items: items.length, kinds: items.map((i) => i.kind) },
@@ -180,10 +180,11 @@ export async function embedStrategy(shortcode: string): Promise<ScrapeResult> {
   }
 
   return {
+    platform: "instagram",
     shortcode,
     caption,
     author,
     items,
-    source: "embed",
+    source: "ig-embed",
   };
 }

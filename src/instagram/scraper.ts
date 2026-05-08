@@ -1,15 +1,12 @@
 import { logger } from "../logger.js";
-import { apiStrategy } from "./strategies/api.js";
-import { embedStrategy } from "./strategies/embed.js";
-import {
-  extractShortcode,
-  resolveShareUrl,
-} from "./url-parser.js";
 import {
   InvalidUrlError,
   PrivateContentError,
   type ScrapeResult,
-} from "./types.js";
+} from "../media/types.js";
+import { apiStrategy } from "./strategies/api.js";
+import { embedStrategy } from "./strategies/embed.js";
+import { extractShortcode, resolveShareUrl } from "./url-parser.js";
 
 export async function scrape(rawUrl: string): Promise<ScrapeResult> {
   const url = await resolveShareUrl(rawUrl);
