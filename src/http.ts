@@ -8,9 +8,20 @@ const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
 ];
 
+const DESKTOP_USER_AGENTS = [
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+];
+
 export function pickUserAgent(): string {
   const index = Math.floor(Math.random() * USER_AGENTS.length);
   return USER_AGENTS[index] ?? USER_AGENTS[0]!;
+}
+
+export function pickDesktopUserAgent(): string {
+  const index = Math.floor(Math.random() * DESKTOP_USER_AGENTS.length);
+  return DESKTOP_USER_AGENTS[index] ?? DESKTOP_USER_AGENTS[0]!;
 }
 
 export interface FetchOptions {

@@ -163,6 +163,21 @@ export async function webStrategy(
 
   const item = detail?.itemInfo?.itemStruct;
   if (!item) {
+    logger.warn(
+      {
+        id: info.id,
+        scopeKeys: data.__DEFAULT_SCOPE__
+          ? Object.keys(data.__DEFAULT_SCOPE__)
+          : [],
+        detailKeys: detail ? Object.keys(detail) : [],
+        itemInfoKeys: detail?.itemInfo
+          ? Object.keys(detail.itemInfo)
+          : [],
+        statusCode: detail?.statusCode,
+        statusMsg: detail?.statusMsg,
+      },
+      "tiktok web: itemStruct missing — structure changed?",
+    );
     throw new NotFoundError(info.id);
   }
 

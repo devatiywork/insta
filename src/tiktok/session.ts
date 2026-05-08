@@ -1,6 +1,6 @@
 import { config } from "../config.js";
 import { logger } from "../logger.js";
-import { pickUserAgent } from "../http.js";
+import { pickDesktopUserAgent } from "../http.js";
 
 interface SessionCache {
   cookies: string;
@@ -28,7 +28,7 @@ export async function getSession(force = false): Promise<SessionCache> {
     cache = {
       cookies: config.tiktokCookies,
       csrfToken,
-      userAgent: pickUserAgent(),
+      userAgent: pickDesktopUserAgent(),
       expiresAt: Number.MAX_SAFE_INTEGER,
       authenticated: !!sessionId,
     };
@@ -48,7 +48,7 @@ export async function getSession(force = false): Promise<SessionCache> {
 
   logger.debug("tiktok: bootstrapping anonymous session");
   const startedAt = Date.now();
-  const userAgent = pickUserAgent();
+  const userAgent = pickDesktopUserAgent();
   const res = await fetch("https://www.tiktok.com/", {
     headers: {
       "User-Agent": userAgent,
