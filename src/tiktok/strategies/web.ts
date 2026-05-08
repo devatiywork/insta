@@ -41,6 +41,14 @@ interface ItemStruct {
     }>;
     title?: string;
   };
+  music?: {
+    id?: string | number;
+    title?: string;
+    authorName?: string;
+    playUrl?: string;
+    duration?: number;
+    original?: boolean;
+  };
 }
 
 interface UniversalData {
@@ -238,6 +246,17 @@ export async function webStrategy(
     "tiktok web: parsed",
   );
 
+  const audio = item.music?.playUrl
+    ? {
+        url: item.music.playUrl,
+        title: item.music.title,
+        artist: item.music.authorName,
+        durationSec: item.music.duration,
+        filename: `${item.music.id ?? item.id ?? info.id}.mp3`,
+        fetchHeaders,
+      }
+    : undefined;
+
   return {
     platform: "tiktok",
     shortcode: item.id ?? info.id,
@@ -245,5 +264,6 @@ export async function webStrategy(
     author: item.author?.uniqueId,
     items,
     source: "tiktok-web",
+    audio,
   };
 }

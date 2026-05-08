@@ -1,4 +1,9 @@
-import { type Context, InputFile, InputMediaBuilder } from "grammy";
+import {
+  type Context,
+  InlineKeyboard,
+  InputFile,
+  InputMediaBuilder,
+} from "grammy";
 import type { InputMediaPhoto, InputMediaVideo } from "grammy/types";
 import type { MediaItem, ScrapeResult } from "./types.js";
 
@@ -6,6 +11,7 @@ const TG_CAPTION_LIMIT = 1024;
 
 export interface SendOptions {
   disableCaption?: boolean;
+  inlineKeyboard?: InlineKeyboard;
 }
 
 function buildCaption(result: ScrapeResult): string | undefined {
@@ -20,6 +26,14 @@ function buildCaption(result: ScrapeResult): string | undefined {
 
 async function fileFromItem(item: MediaItem): Promise<InputFile> {
   const ext = item.kind === "video" ? "mp4" : "jpg";
+  const filename = item.filename ?? `media.${ext}`;
+
+  if (item.data) {
+    return new InputFile(item.data, filename);
+  }
+  if (!item.url) {
+    throw new Error("MediaItem has neither url nor data");
+  }
   if (item.fetchHeaders) {
     const res = await fetch(item.url, { headers: item.fetchHeaders });
     if (!res.ok) {
@@ -28,9 +42,9 @@ async function fileFromItem(item: MediaItem): Promise<InputFile> {
       );
     }
     const buf = new Uint8Array(await res.arrayBuffer());
-    return new InputFile(buf, `media.${ext}`);
+    return new InputFile(buf, filename);
   }
-  return new InputFile(new URL(item.url), `media.${ext}`);
+  return new InputFile(new URL(item.url), filename);
 }
 
 export async function sendMedia(
@@ -39,6 +53,7 @@ export async function sendMedia(
   options: SendOptions = {},
 ): Promise<void> {
   const caption = options.disableCaption ? undefined : buildCaption(result);
+  const replyMarkup = options.inlineKeyboard;
 
   if (result.items.length === 1) {
     const item = result.items[0]!;
@@ -50,9 +65,10 @@ export async function sendMedia(
         width: item.width,
         height: item.height,
         duration: item.durationSec ? Math.round(item.durationSec) : undefined,
+        reply_markup: replyMarkup,
       });
     } else {
-      await ctx.replyWithPhoto(file, { caption });
+      await ctx.replyWithPhoto(file, { caption, reply_markup: replyMarkup });
     }
     return;
   }

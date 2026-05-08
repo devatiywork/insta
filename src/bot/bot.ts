@@ -4,9 +4,11 @@ import { config } from "../config.js";
 import { logger } from "../logger.js";
 import { createAccessGate } from "./access.js";
 import { registerAdmin } from "./handlers/admin.js";
+import { registerAudio } from "./handlers/audio.js";
 import { registerMessage } from "./handlers/message.js";
 import { registerSettings } from "./handlers/settings.js";
 import { registerStart } from "./handlers/start.js";
+import { registerStats } from "./handlers/stats.js";
 
 export function createBot(): Bot {
   const bot = new Bot(config.botToken, {
@@ -19,6 +21,8 @@ export function createBot(): Bot {
 
   registerStart(bot);
   registerSettings(bot);
+  registerStats(bot);
+  registerAudio(bot);
   registerAdmin(bot);
   registerMessage(bot);
 
@@ -27,6 +31,7 @@ export function createBot(): Bot {
       { command: "start", description: "Приветствие" },
       { command: "help", description: "Справка" },
       { command: "settings", description: "Настройки подписей" },
+      { command: "audio", description: "Извлечь аудио из ссылки" },
     ])
     .catch((err) => logger.warn({ err }, "failed to set bot commands"));
 

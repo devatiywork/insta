@@ -42,4 +42,5 @@ export function registerSettings(bot: Bot): void {
 
   bot.callbackQuery("set:igc", (ctx) => handleToggle(ctx, "igCaption"));
   bot.callbackQuery("set:ttc", (ctx) => handleToggle(ctx, "ttCaption"));
+  bot.callbackQuery("set:ytc", (ctx) => handleToggle(ctx, "ytCaption"));
 }

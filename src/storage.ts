@@ -1,111 +1,108 @@
-import { promises as fs } from "node:fs";
-import { dirname } from "node:path";
-import { config } from "./config.js";
-import { logger } from "./logger.js";
+import { getDb } from "./db.js";
 
 export interface UserPrefs {
   igCaption: boolean;
   ttCaption: boolean;
+  ytCaption: boolean;
 }
 
-interface Store {
-  allowedUsers: number[];
-  userPrefs: Record<string, UserPrefs>;
+export interface AllowedUserRow {
+  userId: number;
+  username: string | null;
+  addedAt: number;
 }
 
-const DEFAULT_PREFS: UserPrefs = { igCaption: true, ttCaption: true };
+const DEFAULT_PREFS: UserPrefs = {
+  igCaption: true,
+  ttCaption: true,
+  ytCaption: true,
+};
 
-let store: Store = { allowedUsers: [], userPrefs: {} };
-let writeChain: Promise<void> = Promise.resolve();
-
-function clone(): Store {
-  return {
-    allowedUsers: [...store.allowedUsers],
-    userPrefs: Object.fromEntries(
-      Object.entries(store.userPrefs).map(([k, v]) => [k, { ...v }]),
-    ),
-  };
-}
-
-async function persist(): Promise<void> {
-  const snapshot = clone();
-  writeChain = writeChain.then(async () => {
-    const json = JSON.stringify(snapshot, null, 2);
-    const tmp = `${config.storagePath}.tmp`;
-    await fs.mkdir(dirname(config.storagePath), { recursive: true });
-    await fs.writeFile(tmp, json, "utf-8");
-    await fs.rename(tmp, config.storagePath);
-  });
-  return writeChain;
-}
-
-export async function loadStorage(): Promise<void> {
-  try {
-    const raw = await fs.readFile(config.storagePath, "utf-8");
-    const parsed = JSON.parse(raw) as Partial<Store>;
-    store = {
-      allowedUsers: Array.isArray(parsed.allowedUsers)
-        ? parsed.allowedUsers.filter((n) => Number.isInteger(n) && n > 0)
-        : [],
-      userPrefs:
-        parsed.userPrefs && typeof parsed.userPrefs === "object"
-          ? parsed.userPrefs
-          : {},
-    };
-    logger.info(
-      {
-        path: config.storagePath,
-        allowedCount: store.allowedUsers.length,
-        prefsCount: Object.keys(store.userPrefs).length,
-      },
-      "storage loaded",
-    );
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      logger.info({ path: config.storagePath }, "storage file missing, starting fresh");
-      await persist();
-      return;
-    }
-    throw err;
-  }
-}
-
-export function listAllowedUsers(): number[] {
-  return [...store.allowedUsers];
+export function listAllowedUsers(): AllowedUserRow[] {
+  const rows = getDb()
+    .prepare(
+      "SELECT user_id AS userId, username, added_at AS addedAt FROM allowed_users ORDER BY added_at ASC",
+    )
+    .all() as AllowedUserRow[];
+  return rows;
 }
 
 export function isInAllowlist(userId: number): boolean {
-  return store.allowedUsers.includes(userId);
+  const row = getDb()
+    .prepare("SELECT 1 FROM allowed_users WHERE user_id = ?")
+    .get(userId);
+  return row !== undefined;
 }
 
-export async function addAllowedUser(userId: number): Promise<boolean> {
-  if (store.allowedUsers.includes(userId)) return false;
-  store.allowedUsers.push(userId);
-  await persist();
-  return true;
+export function addAllowedUser(userId: number, username?: string): boolean {
+  const result = getDb()
+    .prepare(
+      "INSERT INTO allowed_users (user_id, username) VALUES (?, ?) ON CONFLICT(user_id) DO NOTHING",
+    )
+    .run(userId, username ?? null);
+  return result.changes > 0;
 }
 
-export async function removeAllowedUser(userId: number): Promise<boolean> {
-  const idx = store.allowedUsers.indexOf(userId);
-  if (idx < 0) return false;
-  store.allowedUsers.splice(idx, 1);
-  delete store.userPrefs[String(userId)];
-  await persist();
-  return true;
+export function removeAllowedUser(userId: number): boolean {
+  const tx = getDb().transaction(() => {
+    const r = getDb()
+      .prepare("DELETE FROM allowed_users WHERE user_id = ?")
+      .run(userId);
+    getDb().prepare("DELETE FROM user_prefs WHERE user_id = ?").run(userId);
+    return r.changes > 0;
+  });
+  return tx();
+}
+
+export function touchAllowedUser(userId: number, username?: string): void {
+  if (!username) return;
+  getDb()
+    .prepare(
+      "UPDATE allowed_users SET username = ? WHERE user_id = ? AND IFNULL(username, '') <> ?",
+    )
+    .run(username, userId, username);
+}
+
+interface PrefsRow {
+  ig_caption: number;
+  tt_caption: number;
+  yt_caption: number;
 }
 
 export function getPrefs(userId: number): UserPrefs {
-  const existing = store.userPrefs[String(userId)];
-  return existing ? { ...existing } : { ...DEFAULT_PREFS };
+  const row = getDb()
+    .prepare(
+      "SELECT ig_caption, tt_caption, yt_caption FROM user_prefs WHERE user_id = ?",
+    )
+    .get(userId) as PrefsRow | undefined;
+  if (!row) return { ...DEFAULT_PREFS };
+  return {
+    igCaption: row.ig_caption !== 0,
+    ttCaption: row.tt_caption !== 0,
+    ytCaption: row.yt_caption !== 0,
+  };
 }
 
-export async function setPrefs(
+export function setPrefs(
   userId: number,
   patch: Partial<UserPrefs>,
-): Promise<UserPrefs> {
+): UserPrefs {
   const current = getPrefs(userId);
-  const next = { ...current, ...patch };
-  store.userPrefs[String(userId)] = next;
-  await persist();
+  const next: UserPrefs = { ...current, ...patch };
+  getDb()
+    .prepare(
+      `INSERT INTO user_prefs (user_id, ig_caption, tt_caption, yt_caption)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(user_id) DO UPDATE SET
+         ig_caption = excluded.ig_caption,
+         tt_caption = excluded.tt_caption,
+         yt_caption = excluded.yt_caption`,
+    )
+    .run(
+      userId,
+      next.igCaption ? 1 : 0,
+      next.ttCaption ? 1 : 0,
+      next.ytCaption ? 1 : 0,
+    );
   return next;
 }

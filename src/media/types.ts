@@ -1,14 +1,26 @@
 export type MediaKind = "photo" | "video";
 
-export type MediaSource = "ig-api" | "ig-embed" | "tiktok-web";
+export type MediaSource = "ig-api" | "ig-embed" | "tiktok-web" | "youtube-ytdlp";
 
-export type Platform = "instagram" | "tiktok";
+export type Platform = "instagram" | "tiktok" | "youtube";
 
 export interface MediaItem {
   kind: MediaKind;
-  url: string;
+  url?: string;
+  data?: Uint8Array;
+  filename?: string;
   width?: number;
   height?: number;
+  durationSec?: number;
+  fetchHeaders?: Record<string, string>;
+}
+
+export interface AudioInfo {
+  url?: string;
+  data?: Uint8Array;
+  filename?: string;
+  title?: string;
+  artist?: string;
   durationSec?: number;
   fetchHeaders?: Record<string, string>;
 }
@@ -20,6 +32,7 @@ export interface ScrapeResult {
   author?: string;
   items: MediaItem[];
   source: MediaSource;
+  audio?: AudioInfo;
 }
 
 export class MediaError extends Error {
@@ -50,13 +63,24 @@ export class PrivateContentError extends MediaError {
   }
 }
 
+const COOKIE_ENV: Record<Platform, string> = {
+  instagram: "IG_COOKIES",
+  tiktok: "TIKTOK_COOKIES",
+  youtube: "YOUTUBE_COOKIES",
+};
+
 export class AuthRequiredError extends MediaError {
   constructor(public readonly platform: Platform) {
     super(
-      `${platform} blocks anonymous access. Set ${
-        platform === "instagram" ? "IG_COOKIES" : "TIKTOK_COOKIES"
-      } in .env (see README).`,
+      `${platform} blocks anonymous access. Set ${COOKIE_ENV[platform]} in .env (see README).`,
     );
     this.name = "AuthRequiredError";
+  }
+}
+
+export class TooLargeError extends MediaError {
+  constructor(public readonly sizeMb: number) {
+    super(`Media is too large for Telegram (${sizeMb.toFixed(1)} MB > 50 MB)`);
+    this.name = "TooLargeError";
   }
 }

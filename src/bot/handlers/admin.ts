@@ -15,18 +15,26 @@ import {
 type PendingState = "add";
 const pending = new Map<number, PendingState>();
 
+interface ExtractedUser {
+  userId: number;
+  username?: string;
+}
+
 export function isAwaitingAdminInput(userId: number): boolean {
   return pending.has(userId);
 }
 
-function extractUserIdFromMessage(ctx: Context): number | "hidden" | null {
+function extractUserFromMessage(ctx: Context): ExtractedUser | "hidden" | null {
   const msg = ctx.message;
   if (!msg) return null;
 
   const origin = msg.forward_origin;
   if (origin) {
     if (origin.type === "user") {
-      return origin.sender_user.id;
+      return {
+        userId: origin.sender_user.id,
+        username: origin.sender_user.username,
+      };
     }
     if (origin.type === "hidden_user") {
       return "hidden";
@@ -37,7 +45,7 @@ function extractUserIdFromMessage(ctx: Context): number | "hidden" | null {
   const text = msg.text?.trim();
   if (!text) return null;
   const n = Number(text);
-  if (Number.isInteger(n) && n > 0) return n;
+  if (Number.isInteger(n) && n > 0) return { userId: n };
   return null;
 }
 
@@ -87,14 +95,14 @@ export async function handleAdminPendingMessage(ctx: Context): Promise<boolean> 
     return false;
   }
 
-  const result = extractUserIdFromMessage(ctx);
-  if (result === "hidden") {
+  const extracted = extractUserFromMessage(ctx);
+  if (extracted === "hidden") {
     await ctx.reply(
       "У этого пользователя профиль скрыт — ID из форварда не вытащить. Пришли ID числом.",
     );
     return true;
   }
-  if (result === null) {
+  if (extracted === null) {
     await ctx.reply(
       "Не понял. Пришли ID числом или форвардни сообщение пользователя. /cancel — отменить.",
     );
@@ -102,19 +110,23 @@ export async function handleAdminPendingMessage(ctx: Context): Promise<boolean> 
   }
 
   pending.delete(adminId);
-  if (isAdmin(result)) {
+  if (isAdmin(extracted.userId)) {
     await ctx.reply(
-      `Юзер <code>${result}</code> уже админ — доступ и так есть.`,
+      `Юзер <code>${extracted.userId}</code> уже админ — доступ и так есть.`,
       { parse_mode: "HTML" },
     );
     return true;
   }
-  const added = await addAllowedUser(result);
-  logger.info({ adminId, addedUserId: result, isNew: added }, "admin added user");
+  const added = addAllowedUser(extracted.userId, extracted.username);
+  logger.info(
+    { adminId, addedUserId: extracted.userId, username: extracted.username, isNew: added },
+    "admin added user",
+  );
+  const tag = extracted.username ? ` (@${extracted.username})` : "";
   await ctx.reply(
     added
-      ? `✅ Добавлен пользователь <code>${result}</code>.`
-      : `Пользователь <code>${result}</code> уже в списке.`,
+      ? `✅ Добавлен пользователь <code>${extracted.userId}</code>${tag}.`
+      : `Пользователь <code>${extracted.userId}</code>${tag} уже в списке.`,
     { parse_mode: "HTML" },
   );
   return true;
@@ -128,7 +140,7 @@ async function handleRemoveCallback(ctx: Context): Promise<void> {
     await ctx.answerCallbackQuery({ text: "Кривой id" });
     return;
   }
-  const removed = await removeAllowedUser(userId);
+  const removed = removeAllowedUser(userId);
   logger.info(
     { adminId: ctx.from?.id, removedUserId: userId, wasPresent: removed },
     "admin removed user",

@@ -41,7 +41,7 @@ export const config = {
   igCookies: optional("IG_COOKIES", ""),
   tiktokCookies: optional("TIKTOK_COOKIES", ""),
   adminUserIds: parseUserIds("ADMIN_USER_IDS", true),
-  storagePath: optional("STORAGE_PATH", "data/storage.json"),
+  dbPath: optional("DB_PATH", "data/bot.db"),
 } as const;
 
 export type Config = typeof config;

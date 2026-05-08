@@ -1,5 +1,5 @@
 import { InlineKeyboard, Keyboard } from "grammy";
-import type { UserPrefs } from "../storage.js";
+import type { AllowedUserRow, UserPrefs } from "../storage.js";
 
 export const BTN_SETTINGS = "⚙️ Настройки";
 export const BTN_ADD_USER = "👤 Добавить";
@@ -22,16 +22,22 @@ export function adminKeyboard(): Keyboard {
 export function settingsInlineKeyboard(prefs: UserPrefs): InlineKeyboard {
   const ig = prefs.igCaption ? "✅" : "❌";
   const tt = prefs.ttCaption ? "✅" : "❌";
+  const yt = prefs.ytCaption ? "✅" : "❌";
   return new InlineKeyboard()
     .text(`Подписи Instagram ${ig}`, "set:igc")
     .row()
-    .text(`Подписи TikTok ${tt}`, "set:ttc");
+    .text(`Подписи TikTok ${tt}`, "set:ttc")
+    .row()
+    .text(`Подписи YouTube ${yt}`, "set:ytc");
 }
 
-export function userListInlineKeyboard(userIds: number[]): InlineKeyboard {
+export function userListInlineKeyboard(users: AllowedUserRow[]): InlineKeyboard {
   const kb = new InlineKeyboard();
-  for (const id of userIds) {
-    kb.text(`❌ Удалить ${id}`, `rm:${id}`).row();
+  for (const u of users) {
+    const label = u.username
+      ? `❌ @${u.username} (${u.userId})`
+      : `❌ ${u.userId}`;
+    kb.text(label, `rm:${u.userId}`).row();
   }
   return kb;
 }

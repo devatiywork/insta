@@ -16,10 +16,12 @@
   },
   "dependencies": {
     "@grammyjs/auto-retry": "^2.0.2",
+    "better-sqlite3": "^12.9.0",
     "grammy": "^1.30.0",
     "pino": "^9.5.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.16.10",
     "pino-pretty": "^11.3.0",
     "tsx": "^4.19.1",

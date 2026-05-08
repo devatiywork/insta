@@ -1,15 +1,16 @@
 import { createBot } from "./bot/bot.js";
 import { config } from "./config.js";
+import { closeDb, initDb } from "./db.js";
 import { logger } from "./logger.js";
-import { loadStorage } from "./storage.js";
 
 async function main(): Promise<void> {
-  await loadStorage();
+  await initDb();
   const bot = createBot();
 
   const stop = async (signal: string): Promise<void> => {
     logger.info({ signal }, "stopping bot");
     await bot.stop();
+    closeDb();
     process.exit(0);
   };
 
