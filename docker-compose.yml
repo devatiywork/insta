@@ -7,4 +7,10 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       IG_COOKIES: ${IG_COOKIES:-}
       TIKTOK_COOKIES: ${TIKTOK_COOKIES:-}
-      ALLOWED_USER_IDS: ${ALLOWED_USER_IDS:-}
+      ADMIN_USER_IDS: ${ADMIN_USER_IDS}
+      STORAGE_PATH: /app/data/storage.json
+    volumes:
+      - bot-data:/app/data
+
+volumes:
+  bot-data:

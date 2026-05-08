@@ -12,6 +12,7 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY --from=builder /app/dist ./dist
+RUN mkdir -p /app/data && chown -R node:node /app/data
 
 USER node
 CMD ["node", "dist/main.js"]

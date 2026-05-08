@@ -4,6 +4,10 @@ import type { MediaItem, ScrapeResult } from "./types.js";
 
 const TG_CAPTION_LIMIT = 1024;
 
+export interface SendOptions {
+  disableCaption?: boolean;
+}
+
 function buildCaption(result: ScrapeResult): string | undefined {
   if (!result.caption && !result.author) return undefined;
   const author = result.author ? `@${result.author}` : "";
@@ -32,8 +36,9 @@ async function fileFromItem(item: MediaItem): Promise<InputFile> {
 export async function sendMedia(
   ctx: Context,
   result: ScrapeResult,
+  options: SendOptions = {},
 ): Promise<void> {
-  const caption = buildCaption(result);
+  const caption = options.disableCaption ? undefined : buildCaption(result);
 
   if (result.items.length === 1) {
     const item = result.items[0]!;

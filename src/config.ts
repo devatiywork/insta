@@ -11,9 +11,14 @@ function optional(name: string, fallback: string): string {
   return value && value.trim() !== "" ? value : fallback;
 }
 
-function parseUserIds(name: string): ReadonlySet<number> {
+function parseUserIds(name: string, requireNonEmpty: boolean): ReadonlySet<number> {
   const raw = process.env[name];
-  if (!raw || raw.trim() === "") return new Set();
+  if (!raw || raw.trim() === "") {
+    if (requireNonEmpty) {
+      throw new Error(`Missing required env var: ${name}`);
+    }
+    return new Set();
+  }
   const ids = new Set<number>();
   for (const part of raw.split(/[,;\s]+/)) {
     if (!part) continue;
@@ -22,6 +27,9 @@ function parseUserIds(name: string): ReadonlySet<number> {
       throw new Error(`Invalid user id in ${name}: "${part}"`);
     }
     ids.add(n);
+  }
+  if (requireNonEmpty && ids.size === 0) {
+    throw new Error(`${name} must contain at least one user id`);
   }
   return ids;
 }
@@ -32,7 +40,8 @@ export const config = {
   logLevel: optional("LOG_LEVEL", "info"),
   igCookies: optional("IG_COOKIES", ""),
   tiktokCookies: optional("TIKTOK_COOKIES", ""),
-  allowedUserIds: parseUserIds("ALLOWED_USER_IDS"),
+  adminUserIds: parseUserIds("ADMIN_USER_IDS", true),
+  storagePath: optional("STORAGE_PATH", "data/storage.json"),
 } as const;
 
 export type Config = typeof config;

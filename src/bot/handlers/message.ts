@@ -9,6 +9,8 @@ import {
   PrivateContentError,
 } from "../../media/types.js";
 import { logger } from "../../logger.js";
+import { getPrefs } from "../../storage.js";
+import { handleAdminPendingMessage } from "./admin.js";
 
 function userMessageForError(err: unknown): string {
   if (err instanceof InvalidUrlError)
@@ -27,21 +29,22 @@ function userMessageForError(err: unknown): string {
 }
 
 export function registerMessage(bot: Bot): void {
+  bot.on("message", async (ctx, next) => {
+    if (await handleAdminPendingMessage(ctx)) return;
+    await next();
+  });
+
   bot.on("message:text", async (ctx) => {
     const text = ctx.message.text;
     if (text.startsWith("/")) return;
 
     const detected = detectUrl(text);
-    if (!detected) {
-      await ctx.reply(
-        "Пришли ссылку на пост Instagram или TikTok. /help для подробностей.",
-      );
-      return;
-    }
+    if (!detected) return;
 
+    const userId = ctx.from?.id;
     const log = logger.child({
       chatId: ctx.chat.id,
-      userId: ctx.from?.id,
+      userId,
       platform: detected.platform,
       url: detected.url,
     });
@@ -49,11 +52,20 @@ export function registerMessage(bot: Bot): void {
     try {
       await ctx.replyWithChatAction("upload_video");
       const result = await scrapeByPlatform(detected);
+      const prefs = userId !== undefined ? getPrefs(userId) : null;
+      const disableCaption =
+        prefs !== null &&
+        ((result.platform === "instagram" && !prefs.igCaption) ||
+          (result.platform === "tiktok" && !prefs.ttCaption));
       log.info(
-        { items: result.items.length, source: result.source },
+        {
+          items: result.items.length,
+          source: result.source,
+          disableCaption,
+        },
         "scrape success",
       );
-      await sendMedia(ctx, result);
+      await sendMedia(ctx, result, { disableCaption });
     } catch (err) {
       log.error({ err }, "scrape or send failed");
       await ctx.reply(userMessageForError(err));

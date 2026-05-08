@@ -1,8 +1,10 @@
 import { createBot } from "./bot/bot.js";
 import { config } from "./config.js";
 import { logger } from "./logger.js";
+import { loadStorage } from "./storage.js";
 
 async function main(): Promise<void> {
+  await loadStorage();
   const bot = createBot();
 
   const stop = async (signal: string): Promise<void> => {
@@ -14,10 +16,7 @@ async function main(): Promise<void> {
   process.once("SIGINT", () => void stop("SIGINT"));
   process.once("SIGTERM", () => void stop("SIGTERM"));
 
-  logger.info(
-    { apiRoot: config.apiRoot },
-    "starting bot",
-  );
+  logger.info({ apiRoot: config.apiRoot }, "starting bot");
   await bot.start({
     onStart: (info) =>
       logger.info({ username: info.username }, "bot is running"),

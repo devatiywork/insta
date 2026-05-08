@@ -1,10 +1,12 @@
-import { Bot, GrammyError, HttpError } from "grammy";
 import { autoRetry } from "@grammyjs/auto-retry";
+import { Bot, GrammyError, HttpError } from "grammy";
 import { config } from "../config.js";
 import { logger } from "../logger.js";
-import { createAllowlist } from "./allowlist.js";
-import { registerStart } from "./handlers/start.js";
+import { createAccessGate } from "./access.js";
+import { registerAdmin } from "./handlers/admin.js";
 import { registerMessage } from "./handlers/message.js";
+import { registerSettings } from "./handlers/settings.js";
+import { registerStart } from "./handlers/start.js";
 
 export function createBot(): Bot {
   const bot = new Bot(config.botToken, {
@@ -13,10 +15,20 @@ export function createBot(): Bot {
 
   bot.api.config.use(autoRetry({ maxRetryAttempts: 3, maxDelaySeconds: 30 }));
 
-  bot.use(createAllowlist());
+  bot.use(createAccessGate());
 
   registerStart(bot);
+  registerSettings(bot);
+  registerAdmin(bot);
   registerMessage(bot);
+
+  bot.api
+    .setMyCommands([
+      { command: "start", description: "Приветствие" },
+      { command: "help", description: "Справка" },
+      { command: "settings", description: "Настройки подписей" },
+    ])
+    .catch((err) => logger.warn({ err }, "failed to set bot commands"));
 
   bot.catch((err) => {
     const ctx = err.ctx;
