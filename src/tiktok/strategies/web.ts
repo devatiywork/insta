@@ -15,9 +15,11 @@ const DATA_SCRIPT_RE =
   /<script[^>]+id=["']__UNIVERSAL_DATA_FOR_REHYDRATION__["'][^>]*>([\s\S]*?)<\/script>/i;
 
 interface BitrateEntry {
-  PlayAddr?: { UrlList?: string[] };
+  PlayAddr?: { UrlList?: string[]; Width?: number; Height?: number };
   Bitrate?: number;
   GearName?: string;
+  CodecType?: string;
+  QualityType?: number;
 }
 
 interface ItemStruct {
@@ -61,19 +63,89 @@ interface UniversalData {
   };
 }
 
-function pickVideoUrl(video: NonNullable<ItemStruct["video"]>): string | null {
-  const bitrates = video.bitrateInfo ?? [];
-  let best: { url: string; bitrate: number } | null = null;
-  for (const entry of bitrates) {
-    const url = entry.PlayAddr?.UrlList?.[0];
+interface VideoVariant {
+  url: string;
+  height: number;
+  width: number;
+  bitrate: number;
+  qualityType: number;
+  codecType: string;
+  gear: string;
+}
+
+function parseGearHeight(gear?: string): number {
+  if (!gear) return 0;
+  // GearName примеры: "normal_540_0", "adapt_lowest_1080_1", "lowest_360_0"
+  const m = gear.match(/(\d{3,4})(?!.*\d{3,4})/);
+  return m ? Number(m[1]) : 0;
+}
+
+function pickBestVideoVariant(
+  video: NonNullable<ItemStruct["video"]>,
+): VideoVariant | null {
+  const candidates: VideoVariant[] = [];
+  for (const e of video.bitrateInfo ?? []) {
+    const url = e.PlayAddr?.UrlList?.[0];
     if (!url) continue;
-    const bitrate = entry.Bitrate ?? 0;
-    if (!best || bitrate > best.bitrate) {
-      best = { url, bitrate };
-    }
+    const height =
+      e.PlayAddr?.Height ?? parseGearHeight(e.GearName) ?? 0;
+    const width = e.PlayAddr?.Width ?? 0;
+    candidates.push({
+      url,
+      height,
+      width,
+      bitrate: e.Bitrate ?? 0,
+      qualityType: e.QualityType ?? 0,
+      codecType: e.CodecType ?? "unknown",
+      gear: e.GearName ?? "",
+    });
   }
-  if (best) return best.url;
-  return video.playAddr ?? video.downloadAddr ?? null;
+
+  if (candidates.length === 0) {
+    const fallbackUrl = video.playAddr ?? video.downloadAddr;
+    if (!fallbackUrl) return null;
+    return {
+      url: fallbackUrl,
+      height: video.height ?? 0,
+      width: video.width ?? 0,
+      bitrate: 0,
+      qualityType: 0,
+      codecType: "unknown",
+      gear: video.playAddr ? "playAddr" : "downloadAddr",
+    };
+  }
+
+  // 1. Самое высокое разрешение (даже HEVC при меньшем битрейте лучше H.264 720p).
+  // 2. При равной высоте — QualityType (TT-внутренний ранг качества; у HEVC выше).
+  // 3. Тай-брейкер — битрейт.
+  candidates.sort(
+    (a, b) =>
+      b.height - a.height ||
+      b.qualityType - a.qualityType ||
+      b.bitrate - a.bitrate,
+  );
+
+  logger.debug(
+    {
+      picked: {
+        gear: candidates[0]!.gear,
+        codec: candidates[0]!.codecType,
+        height: candidates[0]!.height,
+        bitrateK: Math.round(candidates[0]!.bitrate / 1000),
+        qualityType: candidates[0]!.qualityType,
+      },
+      available: candidates.map((c) => ({
+        gear: c.gear,
+        codec: c.codecType,
+        height: c.height,
+        bitrateK: Math.round(c.bitrate / 1000),
+        qt: c.qualityType,
+      })),
+    },
+    "tiktok web: video variants",
+  );
+
+  return candidates[0]!;
 }
 
 function extractData(html: string): UniversalData | null {
@@ -211,13 +283,13 @@ export async function webStrategy(
       });
     }
   } else if (item.video) {
-    const videoUrl = pickVideoUrl(item.video);
-    if (videoUrl) {
+    const variant = pickBestVideoVariant(item.video);
+    if (variant) {
       items.push({
         kind: "video",
-        url: videoUrl,
-        width: item.video.width,
-        height: item.video.height,
+        url: variant.url,
+        width: variant.width || item.video.width,
+        height: variant.height || item.video.height,
         durationSec: item.video.duration,
         fetchHeaders,
       });
