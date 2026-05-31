@@ -1,6 +1,11 @@
 export type MediaKind = "photo" | "video";
 
-export type MediaSource = "ig-api" | "ig-embed" | "tiktok-web" | "youtube-ytdlp";
+export type MediaSource =
+  | "ig-api"
+  | "ig-embed"
+  | "tiktok-web"
+  | "tiktok-ytdlp"
+  | "youtube-ytdlp";
 
 export type Platform = "instagram" | "tiktok" | "youtube";
 

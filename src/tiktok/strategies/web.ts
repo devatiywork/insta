@@ -203,20 +203,29 @@ export async function webStrategy(
 
   const data = extractData(body);
   if (!data) {
-    const looksLikeLogin =
-      /tiktok-login|PolarisLoginPage|Log in to TikTok/i.test(
-        body.slice(0, 5000),
-      );
+    const head = body.slice(0, 5000);
+    // Slardar — мониторинг ByteDance; bid вида *_waf / SlardarWAF означает,
+    // что вместо страницы видео отдан интерстишл антибот-фаервола.
+    const looksLikeWaf = /slardar[\w-]*waf|SlardarWAF/i.test(head);
+    const looksLikeLogin = /tiktok-login|PolarisLoginPage|Log in to TikTok/i.test(
+      head,
+    );
     logger.warn(
       {
         id: info.id,
         bodyLength: body.length,
         bodySnippet: body.slice(0, 500),
+        looksLikeWaf,
         looksLikeLogin,
         authenticated: session.authenticated,
       },
       "tiktok web: data script not found",
     );
+    if (looksLikeWaf) {
+      throw new MediaError(
+        "TikTok antibot WAF blocked the request (Slardar challenge page)",
+      );
+    }
     if (looksLikeLogin && !session.authenticated) {
       throw new AuthRequiredError("tiktok");
     }

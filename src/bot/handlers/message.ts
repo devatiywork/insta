@@ -5,7 +5,6 @@ import { sendMedia } from "../../media/send-media.js";
 import {
   AuthRequiredError,
   InvalidUrlError,
-  MediaError,
   NotFoundError,
   PrivateContentError,
   TooLargeError,
@@ -14,35 +13,48 @@ import {
 } from "../../media/types.js";
 import { recordDownload, recordError } from "../../stats.js";
 import { getPrefs, touchAllowedUser } from "../../storage.js";
+import { isAdmin } from "../access.js";
 import { rememberMedia } from "../audio-cache.js";
 import { handleAdminPendingMessage } from "./admin.js";
 
-function userMessageForError(err: unknown): string {
+// Что видит обычный пользователь при реальном сбое сервиса/бота: без деталей,
+// с предложением позвать админа. Админу вместо этого уходит точная причина.
+const CONTACT_ADMIN =
+  "⚠️ Сейчас не получается скачать — похоже, проблема на стороне сервиса или " +
+  "бота, а не в ссылке. Сообщите администратору, он разберётся.";
+
+const PLATFORM_LABEL: Record<Platform, string> = {
+  instagram: "Instagram",
+  tiktok: "TikTok",
+  youtube: "YouTube",
+};
+
+const PLATFORM_COOKIE_ENV: Record<Platform, string> = {
+  instagram: "IG_COOKIES",
+  tiktok: "TIKTOK_COOKIES",
+  youtube: "YOUTUBE_COOKIES",
+};
+
+function userMessageForError(err: unknown, admin: boolean): string {
+  // Ошибки про сам контент (ссылка/приватность/размер) одинаковы для всех —
+  // это не сбой бота, а ожидаемый исход, и звать админа тут незачем.
   if (err instanceof InvalidUrlError)
     return "❌ Это не похоже на ссылку Instagram, TikTok или YouTube.";
   if (err instanceof NotFoundError) return "❌ Пост не найден или удалён.";
   if (err instanceof PrivateContentError)
     return "🔒 Пост приватный — я работаю только с публичными.";
-  if (err instanceof AuthRequiredError) {
-    const envName =
-      err.platform === "instagram"
-        ? "IG_COOKIES"
-        : err.platform === "tiktok"
-          ? "TIKTOK_COOKIES"
-          : "куки";
-    const label =
-      err.platform === "instagram"
-        ? "Instagram"
-        : err.platform === "tiktok"
-          ? "TikTok"
-          : "YouTube";
-    return `🔐 ${label} требует авторизованную сессию. Админу: пропиши ${envName} в .env (см. README).`;
-  }
   if (err instanceof TooLargeError)
     return `⚠️ Файл слишком большой (${err.sizeMb.toFixed(1)} MB > 50 MB лимита Telegram).`;
-  if (err instanceof MediaError)
-    return "⚠️ Не удалось получить медиа. Попробуй ещё раз позже.";
-  return "⚠️ Что-то пошло не так. Попробуй ещё раз.";
+
+  // Дальше — реальные проблемы сервиса/бота. Обычному пользователю: общий
+  // текст с просьбой позвать админа; админу: конкретная причина.
+  if (err instanceof AuthRequiredError) {
+    if (!admin) return CONTACT_ADMIN;
+    return `🔐 ${PLATFORM_LABEL[err.platform]} требует авторизованную сессию. Пропиши ${PLATFORM_COOKIE_ENV[err.platform]} в .env (см. README).`;
+  }
+  if (!admin) return CONTACT_ADMIN;
+  const e = err as Error;
+  return `⚠️ Сбой при получении медиа.\n${e.name}: ${e.message}`;
 }
 
 function shouldDisableCaption(
@@ -121,7 +133,7 @@ export function registerMessage(bot: Bot): void {
         errorName: (err as Error).name,
         errorMsg: (err as Error).message,
       });
-      await ctx.reply(userMessageForError(err));
+      await ctx.reply(userMessageForError(err, isAdmin(userId)));
     }
   });
 }
