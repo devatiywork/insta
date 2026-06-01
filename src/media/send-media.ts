@@ -5,23 +5,52 @@ import {
   InputMediaBuilder,
 } from "grammy";
 import type { InputMediaPhoto, InputMediaVideo } from "grammy/types";
-import type { MediaItem, ScrapeResult } from "./types.js";
+import type { MediaItem, MediaSource, ScrapeResult } from "./types.js";
 
 const TG_CAPTION_LIMIT = 1024;
+
+// Способ получения для админской подписи: «база» — основная стратегия
+// платформы, «альтернатива» — fallback (например, yt-dlp для TikTok).
+const SOURCE_TIER: Record<MediaSource, string> = {
+  "ig-api": "база",
+  "ig-embed": "альтернатива",
+  "tiktok-web": "база",
+  "tiktok-ytdlp": "альтернатива",
+  "youtube-ytdlp": "база",
+};
 
 export interface SendOptions {
   disableCaption?: boolean;
   inlineKeyboard?: InlineKeyboard;
+  /** Дописать в подпись способ получения (показывается только админам). */
+  showSource?: boolean;
 }
 
-function buildCaption(result: ScrapeResult): string | undefined {
-  if (!result.caption && !result.author) return undefined;
+function sourceNote(source: MediaSource): string {
+  return `🛠 способ: ${SOURCE_TIER[source]} (${source})`;
+}
+
+function truncate(text: string, max: number): string {
+  return text.length > max ? text.slice(0, max - 1) + "…" : text;
+}
+
+function buildCaption(
+  result: ScrapeResult,
+  showBody: boolean,
+  note?: string,
+): string | undefined {
   const author = result.author ? `@${result.author}` : "";
-  const text = [author, result.caption].filter(Boolean).join("\n\n");
-  if (!text) return undefined;
-  return text.length > TG_CAPTION_LIMIT
-    ? text.slice(0, TG_CAPTION_LIMIT - 1) + "…"
-    : text;
+  const body = showBody
+    ? [author, result.caption].filter(Boolean).join("\n\n")
+    : "";
+
+  if (!note) return body ? truncate(body, TG_CAPTION_LIMIT) : undefined;
+  if (!body) return note;
+
+  // Note (для админа) показываем целиком, тело подписи ужимаем под остаток.
+  const room = TG_CAPTION_LIMIT - note.length - 2; // запас под "\n\n"
+  const head = room > 0 ? truncate(body, room) : "";
+  return head ? `${head}\n\n${note}` : note;
 }
 
 async function fileFromItem(item: MediaItem): Promise<InputFile> {
@@ -52,7 +81,8 @@ export async function sendMedia(
   result: ScrapeResult,
   options: SendOptions = {},
 ): Promise<void> {
-  const caption = options.disableCaption ? undefined : buildCaption(result);
+  const note = options.showSource ? sourceNote(result.source) : undefined;
+  const caption = buildCaption(result, !options.disableCaption, note);
   const replyMarkup = options.inlineKeyboard;
 
   if (result.items.length === 1) {

@@ -93,6 +93,7 @@ export function registerMessage(bot: Bot): void {
 
     const userId = ctx.from?.id;
     const username = ctx.from?.username;
+    const admin = isAdmin(userId);
     if (userId !== undefined) touchAllowedUser(userId, username);
 
     const log = logger.child({
@@ -120,7 +121,11 @@ export function registerMessage(bot: Bot): void {
         },
         "scrape success",
       );
-      await sendMedia(ctx, result, { disableCaption, inlineKeyboard });
+      await sendMedia(ctx, result, {
+        disableCaption,
+        inlineKeyboard,
+        showSource: admin,
+      });
       if (userId !== undefined) {
         recordDownload(userId, username, result.platform);
       }
@@ -133,7 +138,7 @@ export function registerMessage(bot: Bot): void {
         errorName: (err as Error).name,
         errorMsg: (err as Error).message,
       });
-      await ctx.reply(userMessageForError(err, isAdmin(userId)));
+      await ctx.reply(userMessageForError(err, admin));
     }
   });
 }
